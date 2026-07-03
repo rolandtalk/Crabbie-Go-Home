@@ -19,6 +19,21 @@ const game = {
   homePulse: 0,
 };
 
+const caughtEffect = {
+  active: false,
+  elapsed: 0,
+  duration: 1.35,
+  x: 0,
+  y: 0,
+  particles: [],
+};
+
+const spawnFlash = {
+  active: false,
+  elapsed: 0,
+  duration: 1,
+};
+
 const goal = {
   x: 0,
   y: 48,
@@ -143,6 +158,21 @@ function configureLevel() {
 function resetPlayer() {
   player.x = game.width / 2 - player.width / 2;
   player.y = game.height - player.height - 24;
+  startSpawnFlash();
+}
+
+function startSpawnFlash() {
+  spawnFlash.active = true;
+  spawnFlash.elapsed = 0;
+}
+
+function clearMovement() {
+  Object.keys(keys).forEach((key) => {
+    keys[key] = false;
+  });
+  touchControls.forEach((control) => {
+    control.classList.remove("pressed");
+  });
 }
 
 function resetGame() {
@@ -150,6 +180,8 @@ function resetGame() {
   game.lives = 3;
   game.state = "ready";
   game.homePulse = 0;
+  caughtEffect.active = false;
+  caughtEffect.particles = [];
   configureLevel();
   resetPlayer();
   updateHud(getLevelConfig().message);
@@ -157,7 +189,7 @@ function resetGame() {
 }
 
 function startGame() {
-  if (game.state === "playing") {
+  if (game.state === "playing" || game.state === "caught") {
     return;
   }
 
@@ -169,26 +201,71 @@ function startGame() {
   }
 
   game.state = "playing";
+  startSpawnFlash();
   hideOverlay();
   updateHud(getLevelConfig().message);
 }
 
 function loseLife() {
-  game.lives -= 1;
-
   if (game.lives <= 0) {
     game.lives = 0;
     game.state = "lost";
     updateHud("Caught in the nets");
     showOverlay(
-      "Crabbie Got Tangled",
+      "Game Over",
       "The trap nets caught Crabbie before he reached home. Press R to try again."
     );
     return;
   }
 
   resetPlayer();
+  game.state = "playing";
   updateHud("Careful. Reset and read the lane.");
+}
+
+function createCaughtParticle(angle, speed, index) {
+  const waterColors = ["#e9fbff", "#aeeaf5", "#61c3d7", "#fff4d2"];
+  return {
+    x: caughtEffect.x,
+    y: caughtEffect.y + 6,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed - 120 - Math.random() * 80,
+    radius: 4 + Math.random() * 8,
+    life: 0,
+    maxLife: 0.78 + Math.random() * 0.46,
+    color: waterColors[index % waterColors.length],
+    sandY: Math.min(game.height - 30, caughtEffect.y + 86 + Math.random() * 18),
+    landed: false,
+  };
+}
+
+function startCaughtEffect() {
+  if (caughtEffect.active || game.state !== "playing") {
+    return;
+  }
+
+  game.lives = Math.max(0, game.lives - 1);
+  game.state = "caught";
+  clearMovement();
+  updateHud("Caught in the nets");
+
+  caughtEffect.active = true;
+  caughtEffect.elapsed = 0;
+  caughtEffect.x = player.x + player.width / 2;
+  caughtEffect.y = player.y + player.height / 2;
+  caughtEffect.particles = [];
+
+  for (let i = 0; i < 34; i += 1) {
+    const angle = -Math.PI + (Math.PI * i) / 33;
+    const speed = 70 + Math.random() * 170;
+    caughtEffect.particles.push(createCaughtParticle(angle, speed, i));
+  }
+}
+
+function finishCaughtEffect() {
+  caughtEffect.active = false;
+  caughtEffect.particles = [];
+  loseLife();
 }
 
 function winRound() {
@@ -293,6 +370,52 @@ function updateNets(dt) {
   });
 }
 
+function updateCaughtEffect(dt) {
+  if (!caughtEffect.active) {
+    return;
+  }
+
+  const slowDt = dt * 0.62;
+  caughtEffect.elapsed += slowDt;
+
+  caughtEffect.particles.forEach((particle) => {
+    particle.life += slowDt;
+
+    if (!particle.landed) {
+      particle.vy += 420 * slowDt;
+      particle.x += particle.vx * slowDt;
+      particle.y += particle.vy * slowDt;
+
+      if (particle.y >= particle.sandY) {
+        particle.y = particle.sandY;
+        particle.vx *= 0.32;
+        particle.vy *= -0.18;
+        particle.radius *= 0.68;
+        particle.landed = true;
+      }
+    } else {
+      particle.x += particle.vx * slowDt;
+      particle.radius *= 0.972;
+    }
+  });
+
+  if (caughtEffect.elapsed >= caughtEffect.duration) {
+    finishCaughtEffect();
+  }
+}
+
+function updateSpawnFlash(dt) {
+  if (!spawnFlash.active) {
+    return;
+  }
+
+  spawnFlash.elapsed += dt;
+
+  if (spawnFlash.elapsed >= spawnFlash.duration) {
+    spawnFlash.active = false;
+  }
+}
+
 function updateGoal(dt) {
   if (goal.speed <= 0) {
     return;
@@ -323,7 +446,7 @@ function hitTest(a, b) {
 function checkCollisions() {
   for (const net of nets) {
     if (hitTest(player, net)) {
-      loseLife();
+      startCaughtEffect();
       return;
     }
   }
@@ -456,39 +579,151 @@ function drawNet(net) {
   ctx.save();
   ctx.translate(net.x, net.y);
 
-  ctx.fillStyle = "rgba(188, 71, 73, 0.22)";
-  roundRect(ctx, 0, 0, net.width, net.height, 16);
+  if (net.direction > 0) {
+    ctx.translate(net.width, 0);
+    ctx.scale(-1, 1);
+  }
+
+  ctx.translate(net.width / 2, net.height / 2);
+  ctx.rotate(-Math.PI / 6);
+  ctx.translate(-net.width / 2, -net.height / 2);
+
+  const basketWidth = net.width * 0.68;
+  const basketX = 4;
+  const basketTop = 13;
+  const basketBottom = net.height - 7;
+  const basketCenterX = basketX + basketWidth * 0.48;
+  const basketCenterY = basketTop + 13;
+  const rimHeight = 22;
+  const handleStartX = basketX + basketWidth * 0.74;
+  const handleStartY = basketTop + 7;
+  const handleEndX = net.width - 6;
+  const handleEndY = 7;
+  const woodDark = "#7b4b25";
+  const woodMid = "#ad7440";
+  const woodLight = "#d6a06b";
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  ctx.fillStyle = "rgba(83, 48, 24, 0.16)";
+  ctx.beginPath();
+  ctx.ellipse(basketCenterX + 1, basketBottom - 1, basketWidth * 0.45, 8, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = "#8a3638";
-  ctx.lineWidth = 3;
-  roundRect(ctx, 0, 0, net.width, net.height, 16);
+  ctx.strokeStyle = woodDark;
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.moveTo(handleStartX, handleStartY);
+  ctx.quadraticCurveTo(net.width * 0.78, handleStartY - 7, handleEndX, handleEndY);
   ctx.stroke();
 
-  ctx.strokeStyle = "rgba(138, 54, 56, 0.75)";
+  ctx.strokeStyle = woodMid;
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(handleStartX, handleStartY);
+  ctx.quadraticCurveTo(net.width * 0.78, handleStartY - 7, handleEndX, handleEndY);
+  ctx.stroke();
+
+  ctx.strokeStyle = woodLight;
   ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(handleStartX + 5, handleStartY - 2);
+  ctx.quadraticCurveTo(net.width * 0.82, handleStartY - 8, handleEndX - 6, handleEndY - 1);
+  ctx.stroke();
 
-  for (let x = 12; x < net.width; x += 16) {
+  ctx.strokeStyle = woodDark;
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(handleStartX - 4, handleStartY + 2);
+  ctx.lineTo(handleStartX + 10, handleStartY - 4);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(255, 248, 232, 0.34)";
+  ctx.beginPath();
+  ctx.moveTo(basketX + 6, basketTop + 10);
+  ctx.quadraticCurveTo(basketCenterX, basketTop - 6, basketX + basketWidth - 2, basketTop + 9);
+  ctx.quadraticCurveTo(basketX + basketWidth - 7, basketBottom + 9, basketCenterX - 4, basketBottom + 4);
+  ctx.quadraticCurveTo(basketX + 4, basketBottom + 3, basketX + 6, basketTop + 10);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(123, 75, 37, 0.8)";
+  ctx.lineWidth = 2;
+  for (let i = 1; i <= 4; i += 1) {
+    const ratio = i / 5;
+    const topX = basketX + 8 + basketWidth * ratio;
+    const bottomX = basketCenterX + (ratio - 0.5) * basketWidth * 0.5;
     ctx.beginPath();
-    ctx.moveTo(x, 4);
-    ctx.lineTo(x, net.height - 4);
+    ctx.moveTo(topX, basketTop + 6);
+    ctx.quadraticCurveTo(topX - basketWidth * 0.08, basketCenterY + 10, bottomX, basketBottom + 2);
     ctx.stroke();
   }
 
-  for (let y = 10; y < net.height; y += 12) {
+  for (let i = 0; i < 3; i += 1) {
+    const y = basketTop + 14 + i * 9;
+    const inset = 8 + i * 5;
     ctx.beginPath();
-    ctx.moveTo(4, y);
-    ctx.lineTo(net.width - 4, y);
+    ctx.moveTo(basketX + inset, y);
+    ctx.quadraticCurveTo(basketCenterX, y + 8 + i * 2, basketX + basketWidth - inset * 0.55, y + 1);
     ctx.stroke();
   }
 
-  ctx.fillStyle = "#6e2c2d";
-  ctx.fillRect(-8, 8, 8, net.height - 16);
-  ctx.fillRect(net.width, 8, 8, net.height - 16);
+  ctx.strokeStyle = woodDark;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.ellipse(basketCenterX, basketCenterY, basketWidth * 0.5, rimHeight * 0.52, -0.08, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = woodMid;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(basketCenterX, basketCenterY - 1, basketWidth * 0.48, rimHeight * 0.45, -0.08, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(123, 75, 37, 0.92)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(basketX + 8, basketTop + 18);
+  ctx.quadraticCurveTo(basketX + 10, basketBottom + 2, basketCenterX - 3, basketBottom + 6);
+  ctx.quadraticCurveTo(basketX + basketWidth - 9, basketBottom + 3, basketX + basketWidth - 6, basketTop + 17);
+  ctx.stroke();
+
   ctx.restore();
 }
 
 function drawCrabbie() {
+  if (!spawnFlash.active) {
+    drawCrabbieAt(player.x, player.y, player.width, player.height, player.direction, 1);
+    return;
+  }
+
+  const progress = Math.min(1, spawnFlash.elapsed / spawnFlash.duration);
+  const pulse = Math.sin(progress * Math.PI * 10) * 0.5 + 0.5;
+  const opacity = 0.28 + pulse * 0.72;
+  const centerX = player.x + player.width / 2;
+  const centerY = player.y + player.height / 2;
+
+  ctx.save();
+  ctx.globalAlpha = (1 - progress) * (0.42 + pulse * 0.22);
+  ctx.fillStyle = "#f4fbff";
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY, player.width * (0.62 + pulse * 0.22), player.height * (0.58 + pulse * 0.18), 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#aeeaf5";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY, player.width * (0.82 + progress * 0.36), player.height * (0.74 + progress * 0.28), 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  drawCrabbieAt(player.x, player.y, player.width, player.height, player.direction, opacity);
+}
+
+function drawCrabbieAt(x, y, width, height, direction, opacity = 1) {
+  ctx.save();
+  ctx.globalAlpha *= opacity;
+
   if (crabbieSpriteReady) {
     const frameSize = crabbieSprite.width / 4;
     const directionMap = {
@@ -497,26 +732,29 @@ function drawCrabbie() {
       down: 2,
       left: 3,
     };
-    const frameIndex = directionMap[player.direction] ?? 0;
+    const frameIndex = directionMap[direction] ?? 0;
+    const spriteScale = width / player.width;
+    const spritePaddingX = 20 * spriteScale;
+    const spritePaddingY = 18 * spriteScale;
     ctx.drawImage(
       crabbieSprite,
       frameIndex * frameSize,
       0,
       frameSize,
       crabbieSprite.height,
-      player.x - 20,
-      player.y - 18,
-      player.width + 40,
-      player.height + 40
+      x - spritePaddingX,
+      y - spritePaddingY,
+      width + spritePaddingX * 2,
+      height + spritePaddingY * 2
     );
+    ctx.restore();
     return;
   }
 
-  const centerX = player.x + player.width / 2;
-  const centerY = player.y + player.height / 2;
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
   const bob = Math.sin(performance.now() / 120) * 1.5;
 
-  ctx.save();
   ctx.translate(centerX, centerY + bob);
 
   ctx.strokeStyle = "#44261f";
@@ -570,6 +808,52 @@ function drawCrabbie() {
   ctx.restore();
 }
 
+function drawCaughtEffect() {
+  if (!caughtEffect.active) {
+    return;
+  }
+
+  const progress = Math.min(1, caughtEffect.elapsed / caughtEffect.duration);
+  const wobble = Math.sin(progress * Math.PI * 8) * (1 - progress) * 9;
+  const shrink = Math.max(0.08, 1 - progress * 0.88);
+  const crabbieSize = player.width * shrink;
+  const crabbieX = caughtEffect.x - crabbieSize / 2 + wobble;
+  const crabbieY = caughtEffect.y - crabbieSize / 2 + progress * 18;
+
+  drawCrabbieAt(crabbieX, crabbieY, crabbieSize, crabbieSize, player.direction, 1 - progress);
+
+  ctx.save();
+  caughtEffect.particles.forEach((particle) => {
+    const fade = Math.max(0, 1 - particle.life / particle.maxLife);
+    if (fade <= 0 || particle.radius <= 0.3) {
+      return;
+    }
+
+    ctx.globalAlpha = fade * 0.9;
+    ctx.fillStyle = particle.color;
+    ctx.beginPath();
+    ctx.ellipse(
+      particle.x,
+      particle.y,
+      particle.radius * (particle.landed ? 1.8 : 0.8),
+      particle.radius * (particle.landed ? 0.34 : 1.18),
+      particle.landed ? 0 : particle.vx * 0.006,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+  });
+
+  const ringAlpha = Math.max(0, 0.52 - progress * 0.46);
+  ctx.globalAlpha = ringAlpha;
+  ctx.strokeStyle = "#d6a95d";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.ellipse(caughtEffect.x, caughtEffect.y + 88, 34 + progress * 54, 7 + progress * 8, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawHudHints() {
   ctx.fillStyle = "rgba(27, 42, 47, 0.7)";
   ctx.font = '600 18px "Fredoka"';
@@ -585,7 +869,11 @@ function draw() {
   drawGoalBack();
   nets.forEach(drawNet);
   drawGoalFront();
-  drawCrabbie();
+  if (game.state === "caught") {
+    drawCaughtEffect();
+  } else {
+    drawCrabbie();
+  }
   drawHudHints();
 }
 
@@ -604,10 +892,16 @@ function tick(timestamp) {
   game.lastTime = timestamp;
 
   if (game.state === "playing") {
+    updateSpawnFlash(dt);
     updatePlayer(dt);
     updateNets(dt);
     updateGoal(dt);
     checkCollisions();
+  } else if (game.state === "caught") {
+    updateNets(dt * 0.22);
+    updateCaughtEffect(dt);
+  } else {
+    updateSpawnFlash(dt);
   }
 
   draw();
