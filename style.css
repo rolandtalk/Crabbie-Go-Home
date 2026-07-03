@@ -63,9 +63,7 @@ body {
 }
 
 .hud {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  display: block;
   margin-bottom: 18px;
 }
 
@@ -78,6 +76,17 @@ body {
   box-shadow: 0 10px 30px rgba(93, 58, 46, 0.1);
 }
 
+.hud-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.hud-stat {
+  min-width: 0;
+}
+
 .label {
   display: block;
   font-size: 0.78rem;
@@ -88,10 +97,6 @@ body {
 
 .card strong {
   font-size: 1.35rem;
-}
-
-.status-card strong {
-  font-size: 1.05rem;
 }
 
 .playframe {
@@ -168,7 +173,7 @@ button {
 .touch-controls {
   display: none;
   width: min(260px, 78vw);
-  margin: 18px auto 0;
+  margin: 10px auto 0;
   grid-template-columns: repeat(3, 76px);
   grid-template-rows: repeat(3, 64px);
   justify-content: center;
@@ -246,16 +251,19 @@ button {
 @media (max-width: 800px) {
   .shell {
     width: min(100vw - 20px, 1120px);
-    padding-top: 14px;
+    padding-top: 10px;
   }
 
-  .hud,
   .instructions {
     grid-template-columns: 1fr;
   }
 
+  .hud {
+    margin-bottom: 10px;
+  }
+
   .hero {
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
 
   .intro {
@@ -269,11 +277,11 @@ button {
 
   .touch-controls {
     display: grid;
+    margin-top: 8px;
     transform: translateX(34px);
   }
 
-  .card strong,
-  .status-card strong {
+  .card strong {
     font-size: 1.05rem;
   }
 }
@@ -281,6 +289,7 @@ button {
 @media (hover: none) and (pointer: coarse) {
   .touch-controls {
     display: grid;
+    margin-top: 8px;
     transform: translateX(34px);
   }
 }
@@ -288,21 +297,25 @@ button {
 @media (max-width: 420px) {
   .shell {
     width: min(100vw - 12px, 1120px);
-    padding-top: 10px;
+    padding-top: 8px;
   }
 
   .hud {
-    gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   .card {
-    padding: 10px 12px;
+    padding: 8px 12px;
     border-radius: 14px;
+  }
+
+  .hud-card {
+    gap: 14px;
   }
 
   .touch-controls {
     width: min(232px, 88vw);
+    margin-top: 6px;
     grid-template-columns: repeat(3, 68px);
     grid-template-rows: repeat(3, 58px);
     gap: 7px;

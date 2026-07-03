@@ -3,7 +3,6 @@ const ctx = canvas.getContext("2d");
 
 const livesEl = document.getElementById("lives");
 const levelEl = document.getElementById("level");
-const statusEl = document.getElementById("status");
 const overlayEl = document.getElementById("overlay");
 const startButton = document.getElementById("startButton");
 const touchControls = Array.from(document.querySelectorAll(".touch-control"));
@@ -216,10 +215,9 @@ function winRound() {
   );
 }
 
-function updateHud(message) {
+function updateHud() {
   livesEl.textContent = String(game.lives);
   levelEl.textContent = `${game.level}/${MAX_LEVEL}`;
-  statusEl.textContent = message;
 }
 
 function showOverlay(title, message) {
