@@ -19,6 +19,7 @@ const game = {
   lives: 3,
   lastTime: 0,
   homePulse: 0,
+  tidePhase: 0,
 };
 
 const caughtEffect = {
@@ -982,14 +983,7 @@ function drawBackground() {
   ctx.fillStyle = "#f6e5bd";
   ctx.fillRect(0, 120, game.width, game.height - 120);
 
-  lanes.forEach((lane, index) => {
-    const wave = ctx.createLinearGradient(0, lane.y, game.width, lane.y);
-    wave.addColorStop(0, index % 2 === 0 ? "#8bcfe0" : "#63bbd1");
-    wave.addColorStop(1, index % 2 === 0 ? "#63bbd1" : "#8bcfe0");
-    ctx.fillStyle = wave;
-    roundRect(ctx, 24, lane.y, game.width - 48, lane.height, 18);
-    ctx.fill();
-  });
+  lanes.forEach(drawTideLane);
 
   for (let i = 0; i < 28; i += 1) {
     ctx.fillStyle = i % 2 === 0 ? "#e2b772" : "#d8a761";
@@ -1197,6 +1191,62 @@ function drawNet(net) {
   ctx.restore();
 }
 
+function drawTideLane(lane, index) {
+  const laneX = 24;
+  const laneWidth = game.width - 48;
+  const laneRadius = 18;
+  const phase = game.tidePhase * (index % 2 === 0 ? 1 : -0.82) + index * 1.7;
+  const water = ctx.createLinearGradient(laneX, lane.y, laneX + laneWidth, lane.y);
+  water.addColorStop(0, index % 2 === 0 ? "#8bcfe0" : "#63bbd1");
+  water.addColorStop(0.5, "#72c7da");
+  water.addColorStop(1, index % 2 === 0 ? "#63bbd1" : "#8bcfe0");
+
+  ctx.save();
+  roundRect(ctx, laneX, lane.y, laneWidth, lane.height, laneRadius);
+  ctx.clip();
+  ctx.fillStyle = water;
+  ctx.fillRect(laneX, lane.y, laneWidth, lane.height);
+
+  for (let band = 0; band < 3; band += 1) {
+    const y = lane.y + 18 + band * 22;
+    const amplitude = 3.6 + band * 1.1;
+    const frequency = 0.022 + band * 0.004;
+    const speed = phase * (1.1 + band * 0.32);
+
+    ctx.beginPath();
+    ctx.moveTo(laneX, y);
+
+    for (let x = laneX; x <= laneX + laneWidth + 10; x += 10) {
+      const waveY = y + Math.sin(x * frequency + speed) * amplitude;
+      ctx.lineTo(x, waveY);
+    }
+
+    ctx.lineTo(laneX + laneWidth, y + 13);
+    ctx.lineTo(laneX, y + 13);
+    ctx.closePath();
+    ctx.fillStyle = band % 2 === 0 ? "rgba(255, 255, 255, 0.16)" : "rgba(24, 119, 149, 0.12)";
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(255, 246, 232, 0.22)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  for (let crest = -60; crest < laneWidth + 80; crest += 130) {
+    const x = laneX + ((crest + phase * 34 + index * 25) % (laneWidth + 130));
+    const y = lane.y + 20 + Math.sin(phase + crest * 0.04) * 12;
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.26)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x - 28, y);
+    ctx.quadraticCurveTo(x, y - 8, x + 32, y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
 function drawCrabbie() {
   if (!spawnFlash.active) {
     drawCrabbieAt(player.x, player.y, player.width, player.height, player.direction, 1);
@@ -1396,6 +1446,7 @@ function roundRect(context, x, y, width, height, radius) {
 function tick(timestamp) {
   const dt = Math.min((timestamp - game.lastTime) / 1000 || 0, 0.0167 * 2);
   game.lastTime = timestamp;
+  game.tidePhase += dt * 2.4;
 
   if (game.state === "playing") {
     updateSpawnFlash(dt);
