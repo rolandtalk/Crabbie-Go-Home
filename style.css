@@ -114,7 +114,7 @@ canvas {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: 10px;
   background: rgba(15, 53, 67, 0.38);
 }
 
@@ -123,10 +123,10 @@ canvas {
 }
 
 .overlay-panel {
-  max-width: 520px;
+  width: min(340px, 82%);
   text-align: center;
-  padding: 28px;
-  border-radius: 28px;
+  padding: 14px 16px 16px;
+  border-radius: 14px;
   background: rgba(255, 248, 232, 0.94);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
 }
@@ -140,21 +140,85 @@ canvas {
 }
 
 .overlay h2 {
-  margin: 8px 0 10px;
-  font-size: clamp(2rem, 4vw, 3rem);
+  margin: 4px 0 10px;
+  font-size: clamp(1.45rem, 3vw, 2.1rem);
   line-height: 0.95;
+}
+
+.overlay-panel p[hidden] {
+  display: none;
+}
+
+.overlay-panel p:not(.overlay-kicker) {
+  margin: 0 0 14px;
 }
 
 button {
   border: 0;
   border-radius: 999px;
-  padding: 14px 24px;
+  padding: 11px 20px;
   font: inherit;
   font-weight: 700;
   color: white;
   background: linear-gradient(135deg, var(--sunset), #d65d3d);
   cursor: pointer;
   box-shadow: 0 12px 26px rgba(214, 93, 61, 0.32);
+}
+
+.touch-controls {
+  display: none;
+  width: min(260px, 78vw);
+  margin: 18px auto 0;
+  grid-template-columns: repeat(3, 76px);
+  grid-template-rows: repeat(3, 64px);
+  justify-content: center;
+  gap: 8px;
+  touch-action: none;
+  user-select: none;
+}
+
+.touch-control {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 64px;
+  padding: 0;
+  border-radius: 18px;
+  border: 3px solid rgba(255, 246, 232, 0.82);
+  color: var(--ink);
+  background: rgba(255, 248, 232, 0.88);
+  box-shadow: 0 12px 24px rgba(93, 58, 46, 0.16);
+  font-size: 1.55rem;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-control:active,
+.touch-control.pressed {
+  color: white;
+  background: linear-gradient(135deg, var(--sea-deep), var(--kelp));
+  transform: translateY(2px);
+  box-shadow: 0 8px 16px rgba(27, 42, 47, 0.22);
+}
+
+.touch-control-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.touch-control-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.touch-control-down {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.touch-control-right {
+  grid-column: 3;
+  grid-row: 2;
 }
 
 .instructions {
@@ -190,8 +254,64 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .hero {
+    margin-bottom: 12px;
+  }
+
+  .intro {
+    font-size: 0.98rem;
+  }
+
+  .playframe {
+    border-radius: 18px;
+    border-width: 3px;
+  }
+
+  .touch-controls {
+    display: grid;
+    transform: translateX(34px);
+  }
+
   .card strong,
   .status-card strong {
     font-size: 1.05rem;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .touch-controls {
+    display: grid;
+    transform: translateX(34px);
+  }
+}
+
+@media (max-width: 420px) {
+  .shell {
+    width: min(100vw - 12px, 1120px);
+    padding-top: 10px;
+  }
+
+  .hud {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .card {
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+
+  .touch-controls {
+    width: min(232px, 88vw);
+    grid-template-columns: repeat(3, 68px);
+    grid-template-rows: repeat(3, 58px);
+    gap: 7px;
+    transform: translateX(26px);
+  }
+
+  .touch-control {
+    width: 68px;
+    height: 58px;
+    border-radius: 16px;
   }
 }

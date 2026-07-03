@@ -56,19 +56,51 @@
           <div class="overlay-panel">
             <p class="overlay-kicker">Crabbie needs your help</p>
             <h2>Reach Sweet Home</h2>
-            <p>
-              Use the arrow keys to move. Avoid the moving trap nets. Press
-              Space or Enter to begin, and press R any time to restart.
-            </p>
+            <p hidden></p>
             <button id="startButton" type="button">Start Game</button>
           </div>
         </div>
       </section>
 
+      <section class="touch-controls" aria-label="On-screen movement controls">
+        <button
+          class="touch-control touch-control-up"
+          type="button"
+          data-key="ArrowUp"
+          aria-label="Move up"
+        >
+          ▲
+        </button>
+        <button
+          class="touch-control touch-control-left"
+          type="button"
+          data-key="ArrowLeft"
+          aria-label="Move left"
+        >
+          ◀
+        </button>
+        <button
+          class="touch-control touch-control-down"
+          type="button"
+          data-key="ArrowDown"
+          aria-label="Move down"
+        >
+          ▼
+        </button>
+        <button
+          class="touch-control touch-control-right"
+          type="button"
+          data-key="ArrowRight"
+          aria-label="Move right"
+        >
+          ▶
+        </button>
+      </section>
+
       <section class="instructions">
         <div>
           <h3>Controls</h3>
-          <p>Arrow keys to move, Space or Enter to start, R to restart.</p>
+          <p>Arrow keys or on-screen controls to move. Space or Enter to start, R to restart.</p>
         </div>
         <div>
           <h3>Goal</h3>
@@ -77,8 +109,7 @@
         <div>
           <h3>Twist</h3>
           <p>
-            There are 10 levels, with tighter gaps, faster nets, and moving home
-            zones.
+            Later levels add tighter gaps, faster nets, and moving home zones.
           </p>
         </div>
       </section>

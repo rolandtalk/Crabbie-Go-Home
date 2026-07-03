@@ -6,7 +6,9 @@ const levelEl = document.getElementById("level");
 const statusEl = document.getElementById("status");
 const overlayEl = document.getElementById("overlay");
 const startButton = document.getElementById("startButton");
-const MAX_LEVEL = 10;
+const touchControls = Array.from(document.querySelectorAll(".touch-control"));
+const LEVEL_SEQUENCE = [1, 6, 7, 8, 9, 10];
+const MAX_LEVEL = LEVEL_SEQUENCE[LEVEL_SEQUENCE.length - 1];
 
 const game = {
   width: canvas.width,
@@ -94,6 +96,11 @@ function getLevelConfig() {
   return LEVELS[Math.max(0, Math.min(LEVELS.length - 1, game.level - 1))];
 }
 
+function getNextLevel() {
+  const currentIndex = LEVEL_SEQUENCE.indexOf(game.level);
+  return LEVEL_SEQUENCE[currentIndex + 1] ?? null;
+}
+
 function createNets() {
   const config = getLevelConfig();
   const baseSpeed = 108 + game.level * 18;
@@ -140,17 +147,14 @@ function resetPlayer() {
 }
 
 function resetGame() {
-  game.level = 1;
+  game.level = LEVEL_SEQUENCE[0];
   game.lives = 3;
   game.state = "ready";
   game.homePulse = 0;
   configureLevel();
   resetPlayer();
   updateHud(getLevelConfig().message);
-  showOverlay(
-    "Reach Sweet Home",
-    "Use the arrow keys to move. Press Space or Enter to begin. Survive all 10 levels and dodge the trap nets all the way home."
-  );
+  showOverlay("Reach Sweet Home", "");
 }
 
 function startGame() {
@@ -159,7 +163,7 @@ function startGame() {
   }
 
   if (game.state === "lost" || game.state === "finished") {
-    game.level = 1;
+    game.level = LEVEL_SEQUENCE[0];
     game.lives = 3;
     configureLevel();
     resetPlayer();
@@ -189,24 +193,26 @@ function loseLife() {
 }
 
 function winRound() {
-  if (game.level >= MAX_LEVEL) {
+  const nextLevel = getNextLevel();
+
+  if (nextLevel === null) {
     game.state = "finished";
     updateHud("Crabbie is finally home");
     showOverlay(
       "Crabbie Made It Home",
-      "You cleared all 10 levels. Press Space or Enter to play again, or R to reset anytime."
+      "You cleared every active level. Press Space or Enter to play again, or R to reset anytime."
     );
     return;
   }
 
-  game.level += 1;
+  game.level = nextLevel;
   game.state = "won";
   configureLevel();
   resetPlayer();
   updateHud(`Level ${game.level} unlocked`);
   showOverlay(
     `Level ${game.level} Ready`,
-    `${getLevelConfig().message} Press Space or Enter when you are ready for the next crossing.`
+    ""
   );
 }
 
@@ -219,12 +225,25 @@ function updateHud(message) {
 function showOverlay(title, message) {
   overlayEl.classList.remove("hidden");
   overlayEl.querySelector("h2").textContent = title;
-  overlayEl.querySelector(".overlay-panel p:nth-of-type(2)").textContent =
-    message;
+  const messageEl = overlayEl.querySelector(".overlay-panel p:nth-of-type(2)");
+  messageEl.textContent = message;
+  messageEl.hidden = message.trim().length === 0;
 }
 
 function hideOverlay() {
   overlayEl.classList.add("hidden");
+}
+
+function setMovementKey(key, isPressed) {
+  if (key in keys) {
+    keys[key] = isPressed;
+  }
+}
+
+function releaseTouchControl(control) {
+  const key = control.dataset.key;
+  setMovementKey(key, false);
+  control.classList.remove("pressed");
 }
 
 function clampPlayer() {
@@ -618,6 +637,41 @@ window.addEventListener("keyup", (event) => {
     keys[event.key] = false;
     event.preventDefault();
   }
+});
+
+touchControls.forEach((control) => {
+  control.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    control.setPointerCapture(event.pointerId);
+    setMovementKey(control.dataset.key, true);
+    control.classList.add("pressed");
+
+    if (game.state !== "playing") {
+      startGame();
+    }
+  });
+
+  control.addEventListener("pointerup", (event) => {
+    event.preventDefault();
+    releaseTouchControl(control);
+  });
+
+  control.addEventListener("pointercancel", () => {
+    releaseTouchControl(control);
+  });
+
+  control.addEventListener("lostpointercapture", () => {
+    releaseTouchControl(control);
+  });
+});
+
+window.addEventListener("blur", () => {
+  Object.keys(keys).forEach((key) => {
+    keys[key] = false;
+  });
+  touchControls.forEach((control) => {
+    control.classList.remove("pressed");
+  });
 });
 
 startButton.addEventListener("click", startGame);
