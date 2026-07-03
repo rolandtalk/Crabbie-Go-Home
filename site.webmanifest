@@ -1,0 +1,16 @@
+{
+  "name": "Crabbie Go Home",
+  "short_name": "Crabbie",
+  "description": "A 2D arcade web game where Crabbie dodges moving trap nets and races home.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#bfe8ef",
+  "theme_color": "#bfe8ef",
+  "icons": [
+    {
+      "src": "assets/crabbie-top.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    }
+  ]
+}

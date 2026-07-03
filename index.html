@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crabbie Go Home</title>
+    <meta
+      name="description"
+      content="Crabbie Go Home is a 2D arcade web game where you dodge trap nets and guide Crabbie back home."
+    />
+    <meta name="theme-color" content="#bfe8ef" />
+    <link rel="icon" type="image/png" href="assets/crabbie-top.png" />
+    <link rel="manifest" href="site.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;700;800&family=Fredoka:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">2D Arcade Escape</p>
+        <h1>Crabbie Go Home</h1>
+        <p class="intro">
+          Guide Crabbie the horseshoe crab with your arrow keys. Dodge the trap
+          nets, cross the tide lanes, and reach Sweet Home.
+        </p>
+      </section>
+
+      <section class="hud">
+        <div class="card">
+          <span class="label">Lives</span>
+          <strong id="lives">3</strong>
+        </div>
+        <div class="card">
+          <span class="label">Level</span>
+          <strong id="level">1</strong>
+        </div>
+        <div class="card status-card">
+          <span class="label">Status</span>
+          <strong id="status">Sneak through the nets</strong>
+        </div>
+      </section>
+
+      <section class="playframe">
+        <canvas
+          id="game"
+          width="960"
+          height="640"
+          aria-label="Crabbie Go Home game canvas"
+        ></canvas>
+        <div class="overlay" id="overlay">
+          <div class="overlay-panel">
+            <p class="overlay-kicker">Crabbie needs your help</p>
+            <h2>Reach Sweet Home</h2>
+            <p>
+              Use the arrow keys to move. Avoid the moving trap nets. Press
+              Space or Enter to begin, and press R any time to restart.
+            </p>
+            <button id="startButton" type="button">Start Game</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="instructions">
+        <div>
+          <h3>Controls</h3>
+          <p>Arrow keys to move, Space or Enter to start, R to restart.</p>
+        </div>
+        <div>
+          <h3>Goal</h3>
+          <p>Cross the beach lanes, dodge the nets, and get Crabbie home.</p>
+        </div>
+        <div>
+          <h3>Twist</h3>
+          <p>
+            There are 10 levels, with tighter gaps, faster nets, and moving home
+            zones.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script src="game.js"></script>
+  </body>
+</html>

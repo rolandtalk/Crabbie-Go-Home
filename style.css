@@ -1,0 +1,197 @@
+:root {
+  --sand: #f3dfb2;
+  --sand-deep: #d8b97c;
+  --foam: #fff6e8;
+  --sea: #78c5d6;
+  --sea-deep: #187795;
+  --kelp: #2e6544;
+  --shell: #5d3a2e;
+  --sunset: #ff8f57;
+  --danger: #bc4749;
+  --ink: #1b2a2f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Fredoka", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top, rgba(255, 245, 204, 0.8), transparent 32%),
+    linear-gradient(180deg, #bfe8ef 0%, #f9d99b 45%, #edc17b 100%);
+}
+
+.shell {
+  width: min(1120px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 24px 0 40px;
+}
+
+.hero h1,
+.overlay h2,
+.instructions h3 {
+  font-family: "Baloo 2", cursive;
+}
+
+.hero {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.76rem;
+  color: var(--sea-deep);
+}
+
+.hero h1 {
+  margin: 6px 0 2px;
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  line-height: 0.95;
+}
+
+.intro {
+  width: min(680px, 100%);
+  margin: 0 auto;
+  font-size: 1.04rem;
+}
+
+.hud {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.card {
+  padding: 14px 18px;
+  border-radius: 20px;
+  background: rgba(255, 248, 232, 0.8);
+  border: 2px solid rgba(27, 42, 47, 0.08);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px rgba(93, 58, 46, 0.1);
+}
+
+.label {
+  display: block;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(27, 42, 47, 0.72);
+}
+
+.card strong {
+  font-size: 1.35rem;
+}
+
+.status-card strong {
+  font-size: 1.05rem;
+}
+
+.playframe {
+  position: relative;
+  border-radius: 28px;
+  overflow: hidden;
+  border: 4px solid rgba(255, 246, 232, 0.75);
+  box-shadow: 0 26px 50px rgba(24, 119, 149, 0.22);
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: linear-gradient(180deg, #b8e7ef 0%, #f3deb2 100%);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 53, 67, 0.38);
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay-panel {
+  max-width: 520px;
+  text-align: center;
+  padding: 28px;
+  border-radius: 28px;
+  background: rgba(255, 248, 232, 0.94);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+}
+
+.overlay-kicker {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.8rem;
+  color: var(--sea-deep);
+}
+
+.overlay h2 {
+  margin: 8px 0 10px;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 0.95;
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: 14px 24px;
+  font: inherit;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, var(--sunset), #d65d3d);
+  cursor: pointer;
+  box-shadow: 0 12px 26px rgba(214, 93, 61, 0.32);
+}
+
+.instructions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.instructions div {
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: rgba(255, 248, 232, 0.72);
+}
+
+.instructions h3 {
+  margin: 0 0 6px;
+  font-size: 1.35rem;
+}
+
+.instructions p {
+  margin: 0;
+}
+
+@media (max-width: 800px) {
+  .shell {
+    width: min(100vw - 20px, 1120px);
+    padding-top: 14px;
+  }
+
+  .hud,
+  .instructions {
+    grid-template-columns: 1fr;
+  }
+
+  .card strong,
+  .status-card strong {
+    font-size: 1.05rem;
+  }
+}
