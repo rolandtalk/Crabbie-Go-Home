@@ -5,9 +5,11 @@ const livesEl = document.getElementById("lives");
 const levelEl = document.getElementById("level");
 const overlayEl = document.getElementById("overlay");
 const startButton = document.getElementById("startButton");
+const musicToggle = document.getElementById("musicToggle");
 const touchControls = Array.from(document.querySelectorAll(".touch-control"));
 const LEVEL_SEQUENCE = [1, 6, 7, 8, 9, 10];
 const MAX_LEVEL = LEVEL_SEQUENCE[LEVEL_SEQUENCE.length - 1];
+const MUSIC_MIDI_URL = "assets/nutcracker-ouverture.mid";
 
 const game = {
   width: canvas.width,
@@ -106,6 +108,501 @@ crabbieSprite.addEventListener("load", () => {
 });
 crabbieSprite.src = "assets/crabbie-spritesheet.png";
 
+const audioState = {
+  context: null,
+  musicGain: null,
+  sfxGain: null,
+  musicEnabled: true,
+  midi: null,
+  loadingMidi: null,
+  scheduler: null,
+  startedAt: 0,
+  nextNoteIndex: 0,
+  activeNodes: [],
+};
+
+function getAudioContext() {
+  if (!audioState.context) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) {
+      audioState.musicEnabled = false;
+      updateMusicToggle();
+      return null;
+    }
+
+    audioState.context = new AudioContextClass();
+    audioState.musicGain = audioState.context.createGain();
+    audioState.musicGain.gain.value = 0.24;
+    audioState.musicGain.connect(audioState.context.destination);
+    audioState.sfxGain = audioState.context.createGain();
+    audioState.sfxGain.gain.value = 0.38;
+    audioState.sfxGain.connect(audioState.context.destination);
+  }
+
+  return audioState.context;
+}
+
+function readVariableLength(bytes, cursor) {
+  let value = 0;
+  let position = cursor;
+
+  while (position < bytes.length) {
+    const byte = bytes[position];
+    position += 1;
+    value = (value << 7) | (byte & 0x7f);
+
+    if ((byte & 0x80) === 0) {
+      break;
+    }
+  }
+
+  return { value, position };
+}
+
+function readText(bytes, offset, length) {
+  let text = "";
+
+  for (let i = 0; i < length; i += 1) {
+    text += String.fromCharCode(bytes[offset + i]);
+  }
+
+  return text;
+}
+
+function readUint16(bytes, offset) {
+  return (bytes[offset] << 8) | bytes[offset + 1];
+}
+
+function readUint32(bytes, offset) {
+  return (
+    (bytes[offset] << 24) |
+    (bytes[offset + 1] << 16) |
+    (bytes[offset + 2] << 8) |
+    bytes[offset + 3]
+  ) >>> 0;
+}
+
+function parseMidi(bytes) {
+  if (readText(bytes, 0, 4) !== "MThd") {
+    throw new Error("Invalid MIDI header");
+  }
+
+  const headerLength = readUint32(bytes, 4);
+  const trackCount = readUint16(bytes, 10);
+  const ticksPerBeat = readUint16(bytes, 12);
+  let offset = 8 + headerLength;
+  const events = [];
+
+  for (let trackIndex = 0; trackIndex < trackCount && offset < bytes.length; trackIndex += 1) {
+    if (readText(bytes, offset, 4) !== "MTrk") {
+      break;
+    }
+
+    const trackLength = readUint32(bytes, offset + 4);
+    const trackEnd = offset + 8 + trackLength;
+    let position = offset + 8;
+    let tick = 0;
+    let runningStatus = 0;
+
+    while (position < trackEnd) {
+      const delta = readVariableLength(bytes, position);
+      tick += delta.value;
+      position = delta.position;
+
+      let status = bytes[position];
+
+      if (status < 0x80) {
+        status = runningStatus;
+      } else {
+        position += 1;
+        runningStatus = status;
+      }
+
+      if (status === 0xff) {
+        const metaType = bytes[position];
+        position += 1;
+        const length = readVariableLength(bytes, position);
+        position = length.position;
+
+        if (metaType === 0x51 && length.value === 3) {
+          const tempo =
+            (bytes[position] << 16) |
+            (bytes[position + 1] << 8) |
+            bytes[position + 2];
+          events.push({ type: "tempo", tick, tempo });
+        }
+
+        position += length.value;
+        continue;
+      }
+
+      if (status === 0xf0 || status === 0xf7) {
+        const length = readVariableLength(bytes, position);
+        position = length.position + length.value;
+        continue;
+      }
+
+      const eventType = status & 0xf0;
+      const channel = status & 0x0f;
+      const data1 = bytes[position];
+      const data2 = eventType === 0xc0 || eventType === 0xd0 ? 0 : bytes[position + 1];
+      position += eventType === 0xc0 || eventType === 0xd0 ? 1 : 2;
+
+      if (eventType === 0x90 && data2 > 0) {
+        events.push({ type: "noteOn", tick, note: data1, velocity: data2, channel });
+      } else if (eventType === 0x80 || eventType === 0x90) {
+        events.push({ type: "noteOff", tick, note: data1, channel });
+      }
+    }
+
+    offset = trackEnd;
+  }
+
+  const tempoEvents = events
+    .filter((event) => event.type === "tempo")
+    .sort((a, b) => a.tick - b.tick);
+
+  if (tempoEvents.length === 0 || tempoEvents[0].tick !== 0) {
+    tempoEvents.unshift({ type: "tempo", tick: 0, tempo: 500000 });
+  }
+
+  const tempoSegments = [];
+  let lastTick = 0;
+  let lastSecond = 0;
+  let tempo = tempoEvents[0].tempo;
+
+  tempoEvents.forEach((event) => {
+    if (event.tick > lastTick) {
+      lastSecond += ((event.tick - lastTick) * tempo) / ticksPerBeat / 1000000;
+    }
+
+    tempoSegments.push({ tick: event.tick, second: lastSecond, tempo: event.tempo });
+    lastTick = event.tick;
+    tempo = event.tempo;
+  });
+
+  function tickToSeconds(tick) {
+    let segment = tempoSegments[0];
+
+    for (let i = 1; i < tempoSegments.length; i += 1) {
+      if (tempoSegments[i].tick > tick) {
+        break;
+      }
+
+      segment = tempoSegments[i];
+    }
+
+    return segment.second + ((tick - segment.tick) * segment.tempo) / ticksPerBeat / 1000000;
+  }
+
+  const activeNotes = new Map();
+  const notes = [];
+
+  events
+    .filter((event) => event.type === "noteOn" || event.type === "noteOff")
+    .sort((a, b) => a.tick - b.tick)
+    .forEach((event) => {
+      const key = `${event.channel}:${event.note}`;
+
+      if (event.type === "noteOn") {
+        if (!activeNotes.has(key)) {
+          activeNotes.set(key, []);
+        }
+
+        activeNotes.get(key).push(event);
+        return;
+      }
+
+      const starts = activeNotes.get(key);
+      const start = starts?.shift();
+
+      if (!start) {
+        return;
+      }
+
+      const startTime = tickToSeconds(start.tick);
+      const endTime = tickToSeconds(event.tick);
+
+      if (endTime > startTime) {
+        notes.push({
+          start: startTime,
+          duration: Math.min(endTime - startTime, 3.5),
+          note: start.note,
+          velocity: start.velocity,
+        });
+      }
+    });
+
+  notes.sort((a, b) => a.start - b.start);
+
+  const firstNoteStart = notes[0]?.start ?? 0;
+  if (firstNoteStart > 0) {
+    notes.forEach((note) => {
+      note.start = Math.max(0, note.start - firstNoteStart);
+    });
+  }
+
+  return {
+    duration: notes.length ? Math.max(...notes.map((note) => note.start + note.duration)) : 0,
+    notes,
+  };
+}
+
+async function loadMidiMusic() {
+  if (audioState.midi) {
+    return audioState.midi;
+  }
+
+  if (!audioState.loadingMidi) {
+    audioState.loadingMidi = fetch(MUSIC_MIDI_URL)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Unable to load MIDI music");
+        }
+
+        return response.arrayBuffer();
+      })
+      .then((buffer) => parseMidi(new Uint8Array(buffer)));
+  }
+
+  audioState.midi = await audioState.loadingMidi;
+  return audioState.midi;
+}
+
+function midiNoteToFrequency(note) {
+  return 440 * 2 ** ((note - 69) / 12);
+}
+
+function playMusicNote(note, when) {
+  const context = audioState.context;
+
+  if (!context || !audioState.musicGain) {
+    return;
+  }
+
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  const volume = (note.velocity / 127) * 0.045;
+  const attack = 0.012;
+  const release = 0.08;
+  const duration = Math.max(0.08, note.duration);
+
+  oscillator.type = note.note < 55 ? "triangle" : "sine";
+  oscillator.frequency.setValueAtTime(midiNoteToFrequency(note.note), when);
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), when + attack);
+  gain.gain.setTargetAtTime(0.0001, when + Math.max(attack, duration - release), release);
+  oscillator.connect(gain);
+  gain.connect(audioState.musicGain);
+  oscillator.start(when);
+  oscillator.stop(when + duration + release * 3);
+  audioState.activeNodes.push(oscillator, gain);
+  oscillator.addEventListener("ended", () => {
+    audioState.activeNodes = audioState.activeNodes.filter((node) => node !== oscillator && node !== gain);
+  });
+}
+
+function stopMusic() {
+  if (audioState.scheduler) {
+    clearInterval(audioState.scheduler);
+    audioState.scheduler = null;
+  }
+
+  audioState.activeNodes.forEach((node) => {
+    if (typeof node.stop === "function") {
+      try {
+        node.stop();
+      } catch (error) {
+        // The node may have already stopped naturally.
+      }
+    }
+
+    if (typeof node.disconnect === "function") {
+      try {
+        node.disconnect();
+      } catch (error) {
+        // The node may already be disconnected.
+      }
+    }
+  });
+  audioState.activeNodes = [];
+}
+
+function scheduleMusic() {
+  const context = audioState.context;
+  const midi = audioState.midi;
+
+  if (!context || !midi || !audioState.musicEnabled || audioState.scheduler) {
+    return;
+  }
+
+  audioState.startedAt = context.currentTime + 0.01;
+  audioState.nextNoteIndex = 0;
+
+  const runScheduler = () => {
+    if (!audioState.musicEnabled || game.state !== "playing" || !audioState.midi) {
+      stopMusic();
+      return;
+    }
+
+    const songPosition = context.currentTime - audioState.startedAt;
+    const lookAhead = songPosition + 1.2;
+
+    while (
+      audioState.nextNoteIndex < audioState.midi.notes.length &&
+      audioState.midi.notes[audioState.nextNoteIndex].start <= lookAhead
+    ) {
+      const note = audioState.midi.notes[audioState.nextNoteIndex];
+      playMusicNote(note, audioState.startedAt + note.start);
+      audioState.nextNoteIndex += 1;
+    }
+
+    if (songPosition > audioState.midi.duration + 0.8) {
+      audioState.startedAt = context.currentTime + 0.01;
+      audioState.nextNoteIndex = 0;
+    }
+  };
+
+  runScheduler();
+  audioState.scheduler = setInterval(runScheduler, 50);
+}
+
+async function startMusic() {
+  if (!audioState.musicEnabled || game.state !== "playing") {
+    return;
+  }
+
+  const context = getAudioContext();
+
+  if (!context) {
+    return;
+  }
+
+  if (context.state === "suspended") {
+    await context.resume();
+  }
+
+  try {
+    await loadMidiMusic();
+    scheduleMusic();
+  } catch (error) {
+    audioState.musicEnabled = false;
+    updateMusicToggle();
+  }
+}
+
+function updateMusicToggle() {
+  if (!musicToggle) {
+    return;
+  }
+
+  musicToggle.textContent = audioState.musicEnabled ? "Music On" : "Music Off";
+  musicToggle.setAttribute("aria-pressed", String(audioState.musicEnabled));
+}
+
+function toggleMusic() {
+  audioState.musicEnabled = !audioState.musicEnabled;
+  updateMusicToggle();
+
+  if (audioState.musicEnabled && game.state === "playing") {
+    startMusic();
+  } else {
+    stopMusic();
+  }
+}
+
+function playVaporizeSound() {
+  const context = getAudioContext();
+
+  if (!context || !audioState.sfxGain) {
+    return;
+  }
+
+  if (context.state === "suspended") {
+    context.resume();
+  }
+
+  const now = context.currentTime;
+  const sweep = context.createOscillator();
+  const sweepGain = context.createGain();
+
+  sweep.type = "sine";
+  sweep.frequency.setValueAtTime(920, now);
+  sweep.frequency.exponentialRampToValueAtTime(140, now + 0.75);
+  sweepGain.gain.setValueAtTime(0.0001, now);
+  sweepGain.gain.exponentialRampToValueAtTime(0.18, now + 0.04);
+  sweepGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.82);
+  sweep.connect(sweepGain);
+  sweepGain.connect(audioState.sfxGain);
+  sweep.start(now);
+  sweep.stop(now + 0.9);
+
+  for (let i = 0; i < 7; i += 1) {
+    const dropTime = now + 0.08 + i * 0.075;
+    const drop = context.createOscillator();
+    const dropGain = context.createGain();
+
+    drop.type = "triangle";
+    drop.frequency.setValueAtTime(520 + i * 80, dropTime);
+    drop.frequency.exponentialRampToValueAtTime(190 + i * 18, dropTime + 0.13);
+    dropGain.gain.setValueAtTime(0.0001, dropTime);
+    dropGain.gain.exponentialRampToValueAtTime(0.12 - i * 0.009, dropTime + 0.012);
+    dropGain.gain.exponentialRampToValueAtTime(0.0001, dropTime + 0.16);
+    drop.connect(dropGain);
+    dropGain.connect(audioState.sfxGain);
+    drop.start(dropTime);
+    drop.stop(dropTime + 0.2);
+  }
+}
+
+function playGameOverSound() {
+  const context = getAudioContext();
+
+  if (!context || !audioState.sfxGain) {
+    return;
+  }
+
+  if (context.state === "suspended") {
+    context.resume();
+  }
+
+  const now = context.currentTime;
+  const notes = [523.25, 392, 293.66, 220, 164.81];
+
+  notes.forEach((frequency, index) => {
+    const start = now + index * 0.16;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const duration = 0.28 + index * 0.03;
+
+    oscillator.type = index < 3 ? "triangle" : "sine";
+    oscillator.frequency.setValueAtTime(frequency, start);
+    oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.82, start + duration);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.18 - index * 0.02, start + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    oscillator.connect(gain);
+    gain.connect(audioState.sfxGain);
+    oscillator.start(start);
+    oscillator.stop(start + duration + 0.04);
+  });
+
+  const finish = context.createOscillator();
+  const finishGain = context.createGain();
+  const finishStart = now + 0.78;
+
+  finish.type = "sine";
+  finish.frequency.setValueAtTime(130.81, finishStart);
+  finish.frequency.exponentialRampToValueAtTime(82.41, finishStart + 0.55);
+  finishGain.gain.setValueAtTime(0.0001, finishStart);
+  finishGain.gain.exponentialRampToValueAtTime(0.16, finishStart + 0.04);
+  finishGain.gain.exponentialRampToValueAtTime(0.0001, finishStart + 0.62);
+  finish.connect(finishGain);
+  finishGain.connect(audioState.sfxGain);
+  finish.start(finishStart);
+  finish.stop(finishStart + 0.68);
+}
+
 function getLevelConfig() {
   return LEVELS[Math.max(0, Math.min(LEVELS.length - 1, game.level - 1))];
 }
@@ -176,6 +673,7 @@ function clearMovement() {
 }
 
 function resetGame() {
+  stopMusic();
   game.level = LEVEL_SEQUENCE[0];
   game.lives = 3;
   game.state = "ready";
@@ -202,6 +700,7 @@ function startGame() {
 
   game.state = "playing";
   startSpawnFlash();
+  startMusic();
   hideOverlay();
   updateHud(getLevelConfig().message);
 }
@@ -210,6 +709,8 @@ function loseLife() {
   if (game.lives <= 0) {
     game.lives = 0;
     game.state = "lost";
+    stopMusic();
+    playGameOverSound();
     updateHud("Caught in the nets");
     showOverlay(
       "Game Over",
@@ -220,6 +721,7 @@ function loseLife() {
 
   resetPlayer();
   game.state = "playing";
+  startMusic();
   updateHud("Careful. Reset and read the lane.");
 }
 
@@ -247,6 +749,8 @@ function startCaughtEffect() {
   game.lives = Math.max(0, game.lives - 1);
   game.state = "caught";
   clearMovement();
+  stopMusic();
+  playVaporizeSound();
   updateHud("Caught in the nets");
 
   caughtEffect.active = true;
@@ -273,6 +777,7 @@ function winRound() {
 
   if (nextLevel === null) {
     game.state = "finished";
+    stopMusic();
     updateHud("Crabbie is finally home");
     showOverlay(
       "Crabbie Made It Home",
@@ -283,6 +788,7 @@ function winRound() {
 
   game.level = nextLevel;
   game.state = "won";
+  stopMusic();
   configureLevel();
   resetPlayer();
   updateHud(`Level ${game.level} unlocked`);
@@ -967,8 +1473,14 @@ window.addEventListener("blur", () => {
 });
 
 startButton.addEventListener("click", startGame);
+musicToggle.addEventListener("click", toggleMusic);
 
 configureLevel();
 resetPlayer();
 updateHud(getLevelConfig().message);
+updateMusicToggle();
+loadMidiMusic().catch(() => {
+  audioState.musicEnabled = false;
+  updateMusicToggle();
+});
 requestAnimationFrame(tick);
